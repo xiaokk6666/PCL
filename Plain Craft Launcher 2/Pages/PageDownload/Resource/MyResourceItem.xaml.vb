@@ -61,6 +61,48 @@ Public Class MyResourceItem
 
 #End Region
 
+#Region "收藏"
+
+    ''' <summary>
+    ''' 收藏状态变化时触发。
+    ''' </summary>
+    Public Event FavoriteChanged(sender As Object, e As EventArgs)
+
+    Private _IsFavorite As Boolean = False
+    ''' <summary>
+    ''' 当前是否已收藏。
+    ''' </summary>
+    Public Property IsFavorite As Boolean
+        Get
+            Return _IsFavorite
+        End Get
+        Set(value As Boolean)
+            _IsFavorite = value
+            BtnFavorite.Logo = If(value, Logo.IconButtonLikeFill, Logo.IconButtonLikeLine)
+            BtnFavorite.LogoScale = 1.1
+            BtnFavorite.ToolTip = If(value, "取消收藏", "收藏")
+        End Set
+    End Property
+
+    ''' <summary>
+    ''' 是否显示收藏按钮。
+    ''' </summary>
+    Public Property ShowFavorite As Boolean
+        Get
+            Return BtnFavorite.Visibility = Visibility.Visible
+        End Get
+        Set(value As Boolean)
+            BtnFavorite.Visibility = If(value, Visibility.Visible, Visibility.Collapsed)
+        End Set
+    End Property
+
+    Private Sub BtnFavorite_Click(sender As Object, e As EventArgs) Handles BtnFavorite.Click
+        IsFavorite = Not IsFavorite
+        RaiseEvent FavoriteChanged(Me, EventArgs.Empty)
+    End Sub
+
+#End Region
+
 #Region "点击"
 
     '触发点击事件
@@ -118,6 +160,7 @@ Public Class MyResourceItem
     '鼠标点击判定
     Private IsMouseDown As Boolean = False
     Private Sub Button_MouseDown(sender As Object, e As MouseButtonEventArgs) Handles Me.PreviewMouseLeftButtonDown
+        If BtnFavorite.Visibility = Visibility.Visible AndAlso BtnFavorite.IsMouseOver Then Return '点击收藏按钮时不打开详情
         If IsMouseOver AndAlso CanInteraction Then IsMouseDown = True
     End Sub
     Private Sub Button_MouseLeave(sender As Object, e As Object) Handles Me.MouseLeave, Me.PreviewMouseLeftButtonUp

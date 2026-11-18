@@ -6,6 +6,7 @@
     PanScroll="Content">
     <local:PageResource x:Name="Content" PageType="Mod" TypeName="Mod" TypeNameSpaced=" Mod ">
         <local:MyComboBoxItem Content="全部" Tag="" IsSelected="True" />
+        <local:MyComboBoxItem Content="收藏" Tag="/favorite" Margin="15,0,0,0" />
         <local:MyComboBoxItem Content="世界元素" Tag="406/worldgen" />
         <local:MyComboBoxItem Content="生物群系" Tag="407/" Margin="15,0,0,0" />
         <local:MyComboBoxItem Content="维度" Tag="410/" Margin="15,0,0,0" />

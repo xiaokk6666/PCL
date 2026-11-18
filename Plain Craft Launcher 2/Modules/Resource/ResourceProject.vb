@@ -426,6 +426,77 @@ Public Class ResourceProject
         Next
     End Function
 
+#Region "收藏夹"
+
+    Private Const FavoriteSettingKey As String = "CacheResourceFavorite"
+    Private Shared _Favorites As List(Of ResourceProject) = Nothing
+
+    ''' <summary>
+    ''' 收藏夹中的资源工程列表。首次访问时会从设置中读取。
+    ''' </summary>
+    Public Shared ReadOnly Property Favorites As List(Of ResourceProject)
+        Get
+            If _Favorites Is Nothing Then LoadFavorites()
+            Return _Favorites
+        End Get
+    End Property
+
+    Private Shared Sub LoadFavorites()
+        _Favorites = New List(Of ResourceProject)
+        Try
+            Dim Raw As String = Settings.Get(Of String)(FavoriteSettingKey)
+            If String.IsNullOrWhiteSpace(Raw) Then Return
+            For Each Data As JObject In JArray.Parse(Raw)
+                _Favorites.Add(New ResourceProject(Data))
+            Next
+        Catch ex As Exception
+            Logger.Warn(ex, "读取资源收藏夹失败")
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 判断某个工程是否已被收藏。
+    ''' </summary>
+    Public Shared Function IsFavorite(Project As ResourceProject) As Boolean
+        Return Favorites.Any(Function(p) p.Id = Project.Id AndAlso p.Platform = Project.Platform)
+    End Function
+
+    ''' <summary>
+    ''' 添加或移除收藏，并保存到设置。
+    ''' </summary>
+    Public Shared Sub SetFavorite(Project As ResourceProject, Favorite As Boolean)
+        Dim Changed As Boolean
+        If Favorite Then
+            If IsFavorite(Project) Then Return
+            Favorites.Add(Project)
+            Changed = True
+        Else
+            Changed = Favorites.RemoveAll(Function(p) p.Id = Project.Id AndAlso p.Platform = Project.Platform) > 0
+        End If
+        If Not Changed Then Return
+        SaveFavorites()
+        RaiseEvent FavoritesChanged()
+    End Sub
+
+    Private Shared Sub SaveFavorites()
+        Try
+            Dim Data As New JArray
+            For Each Project In Favorites
+                Data.Add(Project.ToJson())
+            Next
+            Settings.Set(FavoriteSettingKey, Data.ToString(Newtonsoft.Json.Formatting.None))
+        Catch ex As Exception
+            Logger.Error(ex, "保存资源收藏夹失败")
+        End Try
+    End Sub
+
+    ''' <summary>
+    ''' 收藏夹内容变化时触发。
+    ''' </summary>
+    Public Shared Event FavoritesChanged As Action
+
+#End Region
+
     ''' <summary>
     ''' 将当前实例转为可用于保存缓存的 Json。
     ''' </summary>
@@ -452,7 +523,8 @@ Public Class ResourceProject
     ''' <summary>
     ''' 将当前工程信息实例化为控件。
     ''' </summary>
-    Public Function ToResourceItem(ShowMcVersionDesc As Boolean, ShowLoaderDesc As Boolean) As MyVirtualizingElement(Of MyResourceItem)
+    ''' <param name="ShowFavorite">是否显示收藏按钮。</param>
+    Public Function ToResourceItem(ShowMcVersionDesc As Boolean, ShowLoaderDesc As Boolean, Optional ShowFavorite As Boolean = False) As MyVirtualizingElement(Of MyResourceItem)
         '获取版本描述
         Dim GameVersionDescription As String
         If Drops Is Nothing OrElse Not Drops.Any() Then
@@ -563,6 +635,12 @@ Public Class ResourceProject
             NewItem.LabDownload.Text =
                 If(DownloadCount > 100000000, Math.Round(DownloadCount / 100000000, 2) & " 亿",
                 If(DownloadCount > 100000, Math.Floor(DownloadCount / 10000) & " 万", DownloadCount))
+            '收藏
+            If ShowFavorite Then
+                NewItem.IsFavorite = IsFavorite(Me)
+                NewItem.ShowFavorite = True
+                AddHandler NewItem.FavoriteChanged, Sub() SetFavorite(Me, NewItem.IsFavorite)
+            End If
             Return NewItem
         End Function) With {.Height = 64}
     End Function

@@ -1,6 +1,10 @@
 Public Class ResourceSearcher
     Private Const RESULT_PAGE_SIZE = 40
     Private Const MSG_NO_CHINESE_RESULT As String = "无搜索结果，请尝试搜索其英文名称"
+    ''' <summary>
+    ''' 用于表示“收藏夹”分组的特殊 Tag。
+    ''' </summary>
+    Public Const TAG_FAVORITE As String = "/favorite"
 
     '输入
     Public Class SearchRequest
@@ -56,6 +60,10 @@ Public Class ResourceSearcher
         ''' 允许的来源。
         ''' </summary>
         Public Sources As ResourcePlatforms = ResourcePlatforms.Any
+        ''' <summary>
+        ''' 收藏夹模式下的工程列表。仅当 Tag 为 <see cref="TAG_FAVORITE"/> 时使用。
+        ''' </summary>
+        Public Favorites As List(Of ResourceProject) = Nothing
         Public Sub New(Type As ResourceTypes, Storage As SearchResult, TargetResultCount As Integer)
             Me.Type = Type
             Me.Storage = Storage
@@ -117,7 +125,8 @@ Public Class ResourceSearcher
             Return request IsNot Nothing AndAlso
                 Type = request.Type AndAlso TargetResultCount = request.TargetResultCount AndAlso
                 Tag = request.Tag AndAlso ModLoaders = request.ModLoaders AndAlso Sources = request.Sources AndAlso
-                GameVersion = request.GameVersion AndAlso SearchText = request.SearchText
+                GameVersion = request.GameVersion AndAlso SearchText = request.SearchText AndAlso
+                FavoriteKey = request.FavoriteKey
         End Function
         Public Shared Operator =(left As SearchRequest, right As SearchRequest) As Boolean
             Return EqualityComparer(Of SearchRequest).Default.Equals(left, right)
@@ -126,8 +135,17 @@ Public Class ResourceSearcher
             Return Not left = right
         End Operator
         Public Overrides Function GetHashCode() As Integer
-            Return (Type, Tag, ModLoaders, GameVersion, SearchText, Sources).GetHashCode()
+            Return (Type, Tag, ModLoaders, GameVersion, SearchText, Sources, FavoriteKey).GetHashCode()
         End Function
+        ''' <summary>
+        ''' 用于判断收藏夹内容是否变化的标识。
+        ''' </summary>
+        Private ReadOnly Property FavoriteKey As String
+            Get
+                If Favorites Is Nothing Then Return ""
+                Return String.Join(",", Favorites.Select(Function(p) CInt(p.Platform) & ":" & p.Id))
+            End Get
+        End Property
 
     End Class
 
@@ -164,6 +182,23 @@ Public Class ResourceSearcher
     Private Shared Sub Run(Task As LoaderTask(Of SearchRequest, Integer))
         Dim Request As SearchRequest = Task.Input
         Dim Storage = Request.Storage '避免其他线程对 Request.Storage 重新进行了赋值
+
+#Region "收藏夹"
+
+        If Request.Tag = TAG_FAVORITE Then
+            Storage.CurseForgeTotal = 0
+            Storage.ModrinthTotal = 0
+            Storage.ErrorMessage = Nothing
+            Dim FavoriteResults = If(Request.Favorites, New List(Of ResourceProject))
+            If Request.Type <> ResourceTypes.Any Then
+                FavoriteResults = FavoriteResults.Where(Function(p) p.Types.HasFlagF(Request.Type)).ToList()
+            End If
+            If Not FavoriteResults.Any() Then Throw New Exception("收藏夹中还没有内容，快去收藏一些吧！")
+            Storage.Results = FavoriteResults
+            Return
+        End If
+
+#End Region
 
 #Region "前置检查"
 

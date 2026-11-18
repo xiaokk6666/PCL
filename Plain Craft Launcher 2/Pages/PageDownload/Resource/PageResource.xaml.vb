@@ -110,6 +110,8 @@ Public Class PageResource
         If IsFirstLoaded Then Return
         IsFirstLoaded = True
         CType(Parent, MyPageRight).PageLoaderInit(Load, PanLoad, PanContent, PanAlways, Loader, AddressOf Load_OnFinish, AddressOf LoaderInput)
+        '收藏夹内容变化时刷新列表
+        AddHandler ResourceProject.FavoritesChanged, AddressOf FavoritesChanged_Handler
         '将最高 Drop 加入筛选
         If AllDrops IsNot Nothing AndAlso AllDrops.First > 250 Then
             Dim HighestVersion As String = McVersion.DropToVersion(AllDrops.First)
@@ -119,6 +121,13 @@ Public Class PageResource
         End If
     End Sub
     Private Function LoaderInput() As ResourceSearcher.SearchRequest
+        '收藏夹分组
+        If ComboSearchTag.SelectedItem IsNot Nothing AndAlso CStr(ComboSearchTag.SelectedItem.Tag) = ResourceSearcher.TAG_FAVORITE Then
+            Return New ResourceSearcher.SearchRequest(PageType, Storage, (Page + 1) * PAGE_SIZE) With {
+                .Tag = ResourceSearcher.TAG_FAVORITE,
+                .Favorites = ResourceProject.Favorites.ToList()
+            }
+        End If
         Dim Request As New ResourceSearcher.SearchRequest(PageType, Storage, (Page + 1) * PAGE_SIZE)
         Dim GameVersion As String = If(TextSearchVersion.Text = "全部 (也可自行输入)", Nothing,
             If(TextSearchVersion.Text.Contains(".") OrElse TextSearchVersion.Text.Contains("w"), TextSearchVersion.Text, Nothing))
@@ -131,6 +140,20 @@ Public Class PageResource
         End With
         Return Request
     End Function
+
+    ''' <summary>
+    ''' 收藏夹内容变化时，如果当前正处于收藏夹分组，则刷新列表。
+    ''' </summary>
+    Private Sub FavoritesChanged_Handler()
+        If Not IsLoaded Then Return
+        If ComboSearchTag.SelectedItem Is Nothing OrElse CStr(ComboSearchTag.SelectedItem.Tag) <> ResourceSearcher.TAG_FAVORITE Then Return
+        RunInUi(
+        Sub()
+            Page = 0
+            Storage = New ResourceSearcher.SearchResult
+            CType(Parent, MyPageRight).PageLoaderRestart()
+        End Sub)
+    End Sub
 
 #End Region
 
@@ -151,7 +174,8 @@ Public Class PageResource
             For Each Result In Storage.Results.GetRange(Index, Math.Min(Storage.Results.Count - Index, PAGE_SIZE))
                 PanProjects.Children.Add(Result.ToResourceItem(
                     ShowMcVersionDesc:=Loader.Input.GameVersion Is Nothing,
-                    ShowLoaderDesc:=Loader.Input.ModLoaders = ModLoaders.None AndAlso (PageType = ResourceTypes.Mod OrElse PageType = ResourceTypes.ModPack)))
+                    ShowLoaderDesc:=Loader.Input.ModLoaders = ModLoaders.None AndAlso (PageType = ResourceTypes.Mod OrElse PageType = ResourceTypes.ModPack),
+                    ShowFavorite:=(PageType = ResourceTypes.Mod)))
             Next
             '页码
             CardPages.Visibility = If(Storage.Results.Count > 40 OrElse
